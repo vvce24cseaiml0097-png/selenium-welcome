@@ -6,18 +6,33 @@ on:
   workflow_dispatch:
 
 jobs:
-  docker:
+  test:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
       - name: Build Docker image
-        run: docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/selenium-welcome:latest .
+        run: docker build -t selenium-welcome:latest .
 
       - name: Run Selenium tests inside the container
-        run: docker run --rm ${{ secrets.DOCKERHUB_USERNAME }}/selenium-welcome:latest
+        run: docker run --rm selenium-welcome:latest
+
+  push:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Check Docker Hub secrets
+        env:
+          DH_USER: ${{ secrets.DOCKERHUB_USERNAME }}
+          DH_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          if [ -z "$DH_USER" ]; then echo "ERROR: secret DOCKERHUB_USERNAME is missing"; exit 1; fi
+          if [ -z "$DH_TOKEN" ]; then echo "ERROR: secret DOCKERHUB_TOKEN is missing"; exit 1; fi
+          echo "Both secrets found"
 
       - name: Log in to Docker Hub
         uses: docker/login-action@v3
@@ -25,5 +40,9 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Push image to Docker Hub
-        run: docker push ${{ secrets.DOCKERHUB_USERNAME }}/selenium-welcome:latest
+      - name: Build and push image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/selenium-welcome:latest
